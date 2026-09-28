@@ -1,0 +1,49 @@
+name: Send digest to Telegram
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "digests/**"
+  workflow_dispatch:
+    inputs:
+      file:
+        description: "Путь к сводке для повторной отправки (например digests/2026-09-29.md)"
+        required: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: telegram-send
+  cancel-in-progress: false
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Send new digests
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          MANUAL_FILE: ${{ github.event.inputs.file }}
+          BEFORE_SHA: ${{ github.event.before }}
+        run: python scripts/send_telegram.py
+
+      - name: Save detected chat id
+        run: |
+          if [ -n "$(git status --porcelain config/)" ]; then
+            git config user.name "rentico-news-bot"
+            git config user.email "actions@users.noreply.github.com"
+            git add config/
+            git commit -m "Save Telegram chat id"
+            git push
+          fi
